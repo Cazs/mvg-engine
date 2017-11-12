@@ -1,0 +1,29 @@
+{
+  "name": "mvg",
+  "version": "1.0.0",
+  "description": "Backend services for the MVG Eco-system",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "mvg",
+    "travel",
+    "agency",
+    "business",
+    "transport"
+  ],
+  "author": "Casper Ndlovu",
+  "license": "ISC",
+  "dependencies": {
+    "body-parser": "*",
+    "express": "*",
+    "linked-list-adt": "^0.2.1",
+    "mongodb": "*",
+    "mongoose": "*",
+    "multer": "^1.3.0"
+  },
+  "devDependencies": {
+    "nodemon": "*"
+  }
+}
