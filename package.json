@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Backend services for the MVG Eco-system",
   "main": "app.js",
+  "repository":"http://www.github.com/Cazs/mvg-engine.git",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -15,13 +16,13 @@
   ],
   "author": "Casper Ndlovu",
   "license": "ISC",
-  "dependencies": {
-    "body-parser": "*",
+  "dependencies": 
+  {
     "express": "*",
-    "linked-list-adt": "^0.2.1",
-    "mongodb": "*",
     "mongoose": "*",
-    "multer": "^1.3.0"
+    "body-parser": "*",
+    "linked-list-adt": "^0.2.1",
+    "mongodb": "*"
   },
   "devDependencies": {
     "nodemon": "*"

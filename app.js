@@ -5,8 +5,6 @@ const mongoose = require('mongoose');
 const body_parser = require('body-parser');
 const path = require('path');
 const fs = require('fs');
-const hummus = require('hummus');
-var multer = require('multer');
 //const upload = multer({dest : __dirname + '/public/uploads/'});
 //154.0.175.175
 //Custom imports
@@ -17,13 +15,13 @@ const access_levels = require('./models/system/access_levels.js');
 const vericodes = require('./models/system/vericodes.js');
 const counters = require('./models/system/counters.js');
 
-mongoose.connect('mongodb://localhost/mvg');
+mongoose.connect('mongodb://192.168.0.101/mvg');
 
 //globals
 const db = mongoose.connection;
 const app = express();
 const SESSION_TTL = 60 * 240;//Session valid for 4 hours
-const PORT = 9000;
+const PORT = 9999;
 const APP_NAME = "MVG Engine v0.1 - Vanilla";
 
 //init middle-ware
