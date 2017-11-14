@@ -22,7 +22,7 @@ const db = mongoose.connection;
 const app = express();
 const SESSION_TTL = 60 * 240;//Session valid for 4 hours
 const PORT = 9999;
-const APP_NAME = "MVG Engine v0.1 - Vanilla";
+const APP_NAME = "MVG Vanilla Engine v0.1";
 
 //init middle-ware
 app.use(body_parser.urlencoded({extended:true}));
@@ -50,30 +50,51 @@ app.get('/api/timestamp/:object_id', function(req, res)
 });
 
 /**** User route handlers ****/
-app.get('/api/user/:object_id',function(req,res)
+app.get('/api/user/:object_id',function(req, res)
 {
   get(req, res, users, function(err, obj)
   {
     if(err)
     {
-      errorAndCloseConnection(res,500,errors.INTERNAL_ERR);
       logServerError(err);
+      errorAndCloseConnection(res, 500, errors.INTERNAL_ERR);
       return;
     }
+
     if(obj)
     {
-      console.log('user with session_id [%s] requested user object [%s].', req.headers.cookie, obj._id);
+      console.log('user with session_id [%s] requested user object [%s].', req.headers.cookie, obj.username);
       res.json(obj);
-    }else{
-      console.log('database returned a null object for the request of %s', obj_id);
-      res.end();
+    }else
+    {
+      logServerError(new Error('database returned a null user object.'));
+      errorAndCloseConnection(res, 409, errors.INTERNAL_ERR);
     }
   });
 });
 
 app.get('/api/users',function(req,res)
 {
-  getAllObjects(req, res, users);
+  getAll(req, res, users, function(err, obj)
+  {
+    if(err)
+    {
+      logServerError(err);
+      errorAndCloseConnection(res,500,errors.INTERNAL_ERR);
+      return;
+    }
+
+    if(obj)
+    {
+      console.log('user with session_id [%s] requested all user objects.', req.headers.cookie);
+      res.json(obj);
+    }else
+    {
+      logServerError(err);
+      errorAndCloseConnection(res, 409, errors.INTERNAL_ERR + ': ' + 'database returned null user objects.');
+      return;
+    }
+  });
 });
 
 app.post('/api/user/add',function(req,res)
@@ -84,7 +105,7 @@ app.post('/api/user/add',function(req,res)
   //validate user obj
   if(!users.isValid(obj))
   {
-    console.log('invalid users.')
+    console.log('invalid user.')
     errorAndCloseConnection(res, 503, errors.INVALID_DATA);
     return;
   }
@@ -230,172 +251,34 @@ app.get('/api/file/uploads/:file_id', function(req, res)
   console.log('served file "%s"', req.params.file_id);
 });
 
-app.get('/api/file/safety/:file_id', function(req, res)
+app.get('/api/images/slider/:file_id', function(req, res)
 {
-  var ctx, imageXObject, pageModifier, source, targetFileWithHeaders, writer, reader;
-
-  reader = hummus.createReader(__dirname + '/public/pdf/safety/' + req.params.file_id);
-  var page_count = reader.getPagesCount();
-
-  var pdf_path = __dirname + '/public/pdf/safety/' + req.params.file_id;
-  //source = path.resolve(pdf_path);
-
-  var logo_options;
-  if(!req.headers.logo_options)
-  {
-    console.log('no logo options specified for requested file, creating default logo options. [%s]', req.params.file_id);
-    logo_options = {"all":{"x":250, "y":250}};
-    //res.writeHead(409,{'Content-Type':'text/plain'});
-    //res.end('no logo options specified for requested file. [%s]', req.params.file_id);
-    //return;
-  }else{
-    logo_options = JSON.parse(req.headers.logo_options);
-    console.log('logo_options were specified.');
-  }
-  res.writeHead(200,{'Content-Type':'application/pdf'});//,'Content-Length':stat.size
-
-  targetFileWithHeaders = "" + (new Date()) + "_out.pdf";
-
-  writer = hummus.createWriterToModify(new hummus.PDFRStreamForFile(pdf_path),
-                                        new hummus.PDFStreamForResponse(res));
-  /*{
-    modifiedFilePath: __dirname + '/public/pdf/' + targetFileWithHeaders
-  });*/
-
-  console.log(logo_options.all);
-
-  var i,
-      page_top = writer.getModifiedFileParser().parsePage(0).getMediaBox()[3],
-      page_w = writer.getModifiedFileParser().parsePage(0).getMediaBox()[2],
-      image_height = logo_options.all.h,//75,//writer.getImageDimensions(img_path).height,
-      image_width = logo_options.all.w;//160;//writer.getImageDimensions(img_path).width;
-
-  var img_path = __dirname + '/public/logos/logo.jpg';
-  if(!fs.existsSync(img_path))
-  {
-    console.log('logo.jpg DNE, trying logo.png');
-    img_path = __dirname + '/public/logos/logo.png';
-    if(!fs.existsSync(img_path))
-    {
-      console.log('logo.png DNE, using default image.');
-    }
-  }
-
-  for(i=0;i<page_count;i++)
-  {
-    pageModifier = new hummus.PDFPageModifier(writer, i);
-
-    ctx = pageModifier.startContext().getContext();
-
-    var x = logo_options.all.x, y = logo_options.all.y;
-    if(typeof logo_options.all.x == "string")
-    {
-      if(logo_options.all.x.toLowerCase()=='center')
-      {
-        x = (page_w/2)-(image_width*0.5);//center logo on h-axis
-      }else{
-        console.log('unknown logo horizontal position.');
-        x = 0;
-      }
-    }
-    if(typeof logo_options.all.y == "string")
-    {
-      y = 0;
-    }
-
-    ctx.drawImage(x, page_top-image_height-y, img_path,
-                  {transformation:{width:image_width, height:image_height}});
-
-    pageModifier.endContext().writePage();
-  }
-  //writer.writePage();
-  writer.end();
-  res.end();
-  /*
-  var image_path = __dirname + '/public/logos/fadulous.png';
-  var pdfWriter = hummus.createWriterToModify(__dirname + '/public/pdf/safety/'
-                    + req.params.file_id,
-                    {
-                      modifiedFilePath:__dirname + '/public/' + req.params.file_id + '.new.pdf'
-                    });
-    //var img = pdfWriter.createImageXObjectFromJPG(image_path);
-    var pageModifier = new hummus.PDFPageModifier(pdfWriter, 0, true);
-
-    var pageTop = pdfWriter.getModifiedFileParser().parsePage(0).getMediaBox()[3];
-    var imageHeight = pdfWriter.getImageDimensions(image_path).height;
-
-    pageModifier.startContext().getContext().drawImage(0, pageTop-imageHeight, image_path);
-  //var context = pdfWriter.startPageContentContext();
-  //var context = pageModifier.startContext().getContext();
-
-  //context.q().cm(500,0,0,400,0,-100).doXObject(img).Q();
-  //context.drawImage(50, 50, __dirname + '/public/logos/fadulous.png',{transformation:{width:216,height:216}});
-  pageModifier.endContext().writePage();
-  pdfWriter.end();
-
-  console.log('modified and saved document.');*/
-  /*var fpath = path.join(__dirname, '/public/pdf/' + targetFileWithHeaders);
+  var fpath = path.join(__dirname, '/public/images/slider/' + req.params.file_id);//<-- TODO: check, hard-coded
   var stat = fs.statSync(fpath);
-  res.writeHead(200,{'Content-Type':'application/pdf','Content-Length':stat.size});
 
-  var dataStream = fs.createReadStream(fpath);
-  dataStream.pipe(res);*/
-  console.log('served file "%s"', req.params.file_id);
-});
-
-app.get('/api/file/risk/:file_id', function(req, res)
-{
-  var fpath = path.join(__dirname, '/public/pdf/risk/'+req.params.file_id);
-  var stat = fs.statSync(fpath);
-  res.writeHead(200,{'Content-Type':'application/pdf','Content-Length':stat.size});
-
-  var dataStream = fs.createReadStream(fpath);
-  dataStream.pipe(res);
-  console.log('served file "%s"', req.params.file_id);
-});
-
-app.get('/api/file/inspection/:file_id', function(req, res)
-{
-  var fpath = path.join(__dirname, '/public/pdf/inspection/'+req.params.file_id);
-  var stat = fs.statSync(fpath);
-  res.writeHead(200,{'Content-Type':'application/pdf','Content-Length':stat.size});
-
-  var dataStream = fs.createReadStream(fpath);
-  dataStream.pipe(res);
-  console.log('served file "%s"', req.params.file_id);
-});
-
-app.get('/api/file/ohs/:file_id', function(req, res)
-{
-  var fpath = path.join(__dirname, '/public/pdf/ohs/'+req.params.file_id);
-  var stat = fs.statSync(fpath);
-  res.writeHead(200,{'Content-Type':'application/pdf','Content-Length':stat.size});
-
-  var dataStream = fs.createReadStream(fpath);
-  dataStream.pipe(res);
-  console.log('served file "%s"', req.params.file_id);
-});
-
-app.get('/api/file/appointment/:file_id', function(req, res)
-{
-  var fpath = path.join(__dirname, '/public/pdf/appointment/'+req.params.file_id);
-  var stat = fs.statSync(fpath);
-  res.writeHead(200,{'Content-Type':'application/pdf','Content-Length':stat.size});
-
-  var dataStream = fs.createReadStream(fpath);
-  dataStream.pipe(res);
-  console.log('served file "%s"', req.params.file_id);
-});
-
-app.get('/api/file/logo', function(req, res)
-{
-  var fpath = path.join(__dirname, '/public/logos/logo.jpg');//<-- TODO: check, hard-coded
-  var stat = fs.statSync(fpath);
   res.writeHead(200,{'Content-Type':'image/jpg','Content-Length':stat.size});
 
   var dataStream = fs.createReadStream(fpath);
   dataStream.pipe(res);
-  console.log('served logo file');
+
+  console.log('served file [/public/images/slider/%s]', req.params.file_id);
+});
+
+app.get('/api/images/slider', function(req, res)
+{
+  //res.writeHead(200,{'Content-Type':'application/json'});
+
+  fs.readdir(__dirname + '/public/images/slider/', function(err, data)
+  {
+    if(err)
+    {
+      logServerError(err);
+      errorAndCloseConnection(res,500,errors.INTERNAL_ERR);
+      return;
+    }
+    //res.end(JSON.stringify(data));
+    res.json(data);
+  });
 });
 
 add = function(req, res, obj_model, callback)
@@ -562,8 +445,8 @@ logServerError = function(err)
 /**** user authentication ****/
 app.post('/api/auth',function(req, res)
 {
-  var usr = req.body.usr;
-  var pwd = req.body.pwd;
+  var usr = req.body.username;
+  var pwd = req.body.password;
 
   console.log('[%s] login request.', usr);
 
@@ -578,23 +461,24 @@ app.post('/api/auth',function(req, res)
   }
 
   //check if credentials match the ones in the database
-  users.validate(usr,pwd,function(err, user)
+  users.validate(usr, pwd, function(err, user)
   {
     if(err)
     {
-      errorAndCloseConnection(res,500,errors.INTERNAL_ERR);
       logServerError(err);
+      errorAndCloseConnection(res,500,errors.INTERNAL_ERR);
       return;
     }
     if(user)
     {
-      console.log('user [%s] successfully logged in.', user.usr);
+      console.log('user [%s] successfully logged in.', usr);
       var session = sessions.newSession(user._id, SESSION_TTL, user.access_level);
       res.setHeader('Set-Cookie','session=' + session.session_id + ';ttl=' + session.ttl +
                       ';date=' + session.date_issued);
       res.setHeader('Content-Type','text/plain');
-      res.send(session.session_id);
-    }else{
+      res.json(session.session_id);
+    }else
+    {
       errorAndCloseConnection(res,404,errors.NOT_FOUND);
     }
   });

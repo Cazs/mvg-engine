@@ -70,9 +70,9 @@ module.exports.getAll = function(callback)
   Users.find({}, callback);
 };
 
-module.exports.get = function(id,callback)
+module.exports.get = function(id, callback)
 {
-  var query = {usr:id};
+  var query = {username: id};
   Users.findOne(query, function(err,user)
   {
     if(err)
@@ -82,10 +82,12 @@ module.exports.get = function(id,callback)
     }
     if(user)
     {
-      callback(err, user);
-    }else{
+      if(callback)
+        callback(err, user);
+    }else
+    {
       //check with id
-      Users.findOne({_id:id}, callback);
+      Users.findOne({_id: id}, callback);
     }
   });
 };
@@ -115,8 +117,8 @@ module.exports.add = function(user, callback)
         //creating super user account
         console.log('info: creating a super user account.');
         var sha = crypto.createHash('sha1');
-        var pwd = user.pwd;
-        user.pwd = sha.update(pwd).digest('hex');
+        var pwd = user.password;
+        user.password = sha.update(pwd).digest('hex');
         Users.create(user, callback);
       });
     }else if(user.access_level<access_levels.SUPER)//creating other user type
@@ -149,7 +151,7 @@ module.exports.update = function(employee_id,user,callback)
 module.exports.validate = function(usr, pwd, callback)
 {
   var pass = crypto.createHash('sha1').update(pwd).digest('hex');
-  var query = {usr:usr, pwd:pass};
+  var query = {username: usr, password: pass};
   Users.findOne(query, callback);
 }
 
@@ -163,9 +165,9 @@ module.exports.isValid = function(user)
   if(VALIDATION_MODE==VALIDATION_MODE_STRICT)
   {
     console.log('validating user with strict mode enabled.');
-    if(isNullOrEmpty(user.usr))
+    if(isNullOrEmpty(user.username))
       return false;
-    if(isNullOrEmpty(user.pwd))
+    if(isNullOrEmpty(user.password))
       return false;
   }
   if(isNullOrEmpty(user.firstname))
