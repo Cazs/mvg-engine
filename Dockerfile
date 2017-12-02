@@ -21,4 +21,4 @@ EXPOSE 9999
 # ENV NODE_MODULES 
 
 # Run app.py when the container launches
-CMD ["node", "app.js"]
+CMD ["node", "mvg_app.js"]
