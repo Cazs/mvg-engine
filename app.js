@@ -9,31 +9,38 @@ const fs = require('fs');
 //154.0.175.175
 //Custom imports
 const users = require('./models/users/users.js');
+const events = require('./models/events/events.js');
 const sessions = require('./models/system/sessions.js');
 const errors = require('./models/system/error_msgs.js');
 const access_levels = require('./models/system/access_levels.js');
 const vericodes = require('./models/system/vericodes.js');
 const counters = require('./models/system/counters.js');
-
-mongoose.connect('mongodb://192.168.0.101/mvg');
-
-//globals
 const db = mongoose.connection;
 const app = express();
+
+//globals
 const SESSION_TTL = 60 * 240;//Session valid for 4 hours
+const DB_IP = '192.168.137.1';
+const DB_NAME = 'mvg';
 const PORT = 9999;
-const APP_NAME = "MVG Vanilla Engine v0.1";
+const APP_NAME = "MVG Vanilla Engine";
+const APP_VERSION = '0.1';
+const APP_VERSION_NAME = 'Durban';
+
+mongoose.connect('mongodb://' + DB_IP + '/' + DB_NAME);
 
 //init middle-ware
+app.use(express.static(__dirname + '/../mvg-webapp'));
 app.use(body_parser.urlencoded({extended:true}));
 
-//route handlers
-app.get('/',function(req, res)
+//RESTful endpoint definitions
+app.get('/', function(req, res)
 {
   res.setHeader("Content-Type","text/plain");
   res.end("Invalid request, please use /api/*.");
 });
 
+//Timestamp CRUD handlers
 app.get('/api/timestamp/:object_id', function(req, res)
 {
   get(req, res, counters, function(err, obj)
@@ -49,7 +56,71 @@ app.get('/api/timestamp/:object_id', function(req, res)
   });
 });
 
-/**** User route handlers ****/
+//Events CRUD handlers
+app.post('/api/event/add', function(req, res)
+{
+  add(req, res, events, function(err, event)
+  {
+    if(err)
+    {
+      logServerError(err);
+      errorAndCloseConnection(res, 409, errors.CONFLICT + ' - ' + err.message);
+      return;
+    }
+    if(event)
+    {
+      console.log('successfully created event [%s].', event.event_name);
+      res.end(event);
+    } else {
+      console.log('could not create event [%s]', event);
+      errorAndCloseConnection(res, 409, errors.CONFLICT + ' - could not create event.');
+    }
+  });
+});
+
+app.get('/api/events',function(req, res)
+{
+  get(req, res, events, function(err, events_arr)
+  {
+    if(err)
+    {
+      logServerError(err);
+      errorAndCloseConnection(res, 409, errors.CONFLICT + ' - ' + err.message);
+      return;
+    }
+    if(events_arr)
+    {
+      console.log('found & returned [%s] events from database.', events_arr.length);
+      res.end(events_arr);
+    } else {
+      console.log('no events were found in the database.');
+      errorAndCloseConnection(res, 404, errors.NOT_FOUND + ' - no events found.');
+    }
+  });
+});
+
+app.get('/api/event/:object_id',function(req, res)
+{
+  get(req, res, events, function(err, event)
+  {
+    if(err)
+    {
+      logServerError(err);
+      errorAndCloseConnection(res, 409, errors.CONFLICT + ' - ' + err.message);
+      return;
+    }
+    if(event)
+    {
+      console.log('found & returned event [%s] from database.', event.event_name);
+      res.end(event);
+    } else {
+      console.log('no events matching identifier [%s] were found in the database.', req.params.object_id);
+      errorAndCloseConnection(res, 404, errors.NOT_FOUND + ' - event [' + req.params.object_id + '] was not found in the database.');
+    }
+  });
+});
+
+/**** User CRUD route handlers ****/
 app.get('/api/user/:object_id',function(req, res)
 {
   get(req, res, users, function(err, obj)
@@ -196,50 +267,7 @@ app.post('/api/vericode/add', function(req, res)
   }
 });
 
-//Begin file upload
-app.post('/api/upload', function(req, res, next)
-{
-  //TODO: check if file exists - and manage revisioning if it does.
-  console.log('received upload request for "%s"', req.headers.filename);
-  var write_stream = fs.createWriteStream( __dirname + '/uploads/' + req.headers.filename);
-  req.pipe(write_stream);
-
-  //In case any errors occur
-  write_stream.on('error', function (err)
-  {
-    console.log(err);
-    res.writeHead(409, {'content-type':'text/plain'});
-    res.end(err);
-    return;
-  });
-
-  console.log('%s has been successfully uploaded.', req.headers.filename);
-  res.writeHead(200, {'content-type':'text/plain'});
-  res.end(req.headers.filename + ' has been successfully uploaded.');
-});
-
-app.post('/api/upload/logo', function(req, res, next)
-{
-  //TODO: check if file exists - and manage revisioning if it does.
-  console.log('received upload request for company logo.');
-  var write_stream = fs.createWriteStream( __dirname + '/public/logos/logo.' + req.headers.filetype);
-  req.pipe(write_stream);
-
-  //In case any errors occur
-  write_stream.on('error', function (err)
-  {
-    console.log(err);
-    res.writeHead(409, {'content-type':'text/plain'});
-    res.end(err);
-    return;
-  });
-
-  console.log('company logo has been successfully updated.');
-  res.writeHead(200, {'content-type':'text/plain'});
-  res.end('company logo has been successfully updated.');
-});
-
-//#################Begin File Transfer
+//Uploaded files server/route handler
 app.get('/api/file/uploads/:file_id', function(req, res)
 {
   var fpath = path.join(__dirname, '/uploads/'+req.params.file_id);
@@ -251,6 +279,7 @@ app.get('/api/file/uploads/:file_id', function(req, res)
   console.log('served file "%s"', req.params.file_id);
 });
 
+//Slider images file server
 app.get('/api/images/slider/:file_id', function(req, res)
 {
   var fpath = path.join(__dirname, '/public/images/slider/' + req.params.file_id);//<-- TODO: check, hard-coded
@@ -279,6 +308,73 @@ app.get('/api/images/slider', function(req, res)
     //res.end(JSON.stringify(data));
     res.json(data);
   });
+});
+
+//Public directory file server
+app.get('/:object',function(req, res)
+{
+  //if(path.existsSync(__dirname + '/public/'+req.params.object))
+  var file_path = __dirname + '/public/'+req.params.object;
+  fs.exists(file_path, function(exists)
+  {
+    if(exists)
+    {
+      var fpath = path.join(__dirname, '/public/' + req.params.object);
+      var stat = fs.statSync(fpath);
+      res.writeHead(200, {'Content-Type':'text/plain','Content-Length':stat.size});
+      
+      var dataStream = fs.createReadStream(fpath);
+      dataStream.pipe(res);
+      console.log('served file [%s].', req.params.object); 
+    }else{
+      logServerError(new Error("file [" + file_path + "] was not found."));
+      errorAndCloseConnection(res, 404, errors.NOT_FOUND + " - file [" + file_path + "] was not found on this server.");
+    }
+  });
+});
+
+//File uploader
+app.post('/api/upload', function(req, res, next)
+{
+  //TODO: check if file exists - and manage revisioning if it does.
+  console.log('received upload request for "%s"', req.headers.filename);
+  var write_stream = fs.createWriteStream( __dirname + '/uploads/' + req.headers.filename);
+  req.pipe(write_stream);
+
+  //In case any errors occur
+  write_stream.on('error', function (err)
+  {
+    console.log(err);
+    res.writeHead(409, {'content-type':'text/plain'});
+    res.end(err);
+    return;
+  });
+
+  console.log('%s has been successfully uploaded.', req.headers.filename);
+  res.writeHead(200, {'content-type':'text/plain'});
+  res.end(req.headers.filename + ' has been successfully uploaded.');
+});
+
+//Logo uploader
+app.post('/api/upload/logo', function(req, res, next)
+{
+  //TODO: check if file exists - and manage revisioning if it does.
+  console.log('received upload request for company logo.');
+  var write_stream = fs.createWriteStream( __dirname + '/public/logos/logo.' + req.headers.filetype);
+  req.pipe(write_stream);
+
+  //In case any errors occur
+  write_stream.on('error', function (err)
+  {
+    console.log(err);
+    res.writeHead(409, {'content-type':'text/plain'});
+    res.end(err);
+    return;
+  });
+
+  console.log('company logo has been successfully updated.');
+  res.writeHead(200, {'content-type':'text/plain'});
+  res.end('company logo has been successfully updated.');
 });
 
 add = function(req, res, obj_model, callback)
@@ -415,7 +511,7 @@ getAll = function(req, res, obj_model, callback)
   }
 }
 
-errorAndCloseConnection = function(res,status,msg)
+errorAndCloseConnection = function(res, status, msg)
 {
   res.status(status);
   res.setHeader('Connection','close');
@@ -513,4 +609,5 @@ createCounter = function(counter_name)
 //createCounter('');
 
 app.listen(PORT);
-console.log('..::%s server is now running at localhost on port %s::..',APP_NAME, PORT);
+var app_full_name = APP_NAME + ' v' + APP_VERSION + ' - ' + APP_VERSION_NAME;
+console.log('..::%s server is now running at localhost on port %s::..', app_full_name, PORT);
