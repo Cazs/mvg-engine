@@ -2,7 +2,7 @@
   "name": "mvg",
   "version": "1.0.0",
   "description": "Backend services for the MVG Eco-system",
-  "main": "app.js",
+  "main": "mvg_app.js",
   "repository":"http://www.github.com/Cazs/mvg-engine.git",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
