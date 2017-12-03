@@ -20,7 +20,7 @@ const app = express();
 
 //globals
 const SESSION_TTL = 60 * 240;//Session valid for 4 hours
-const DB_IP = '192.168.137.1';
+const DB_IP = '95.85.57.110';//'192.168.137.1';
 const DB_NAME = 'mvg';
 const PORT = 9999;
 const APP_NAME = "MVG Vanilla Engine";
