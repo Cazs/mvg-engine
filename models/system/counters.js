@@ -55,9 +55,9 @@ module.exports.getAll = function(callback)
 
 module.exports.add = function(counter, callback)
 {
-  console.log('attempting to remove old counter record...');
+  console.log('attempting to remove old counter record [%s].', counter.counter_name);
   //remove any existing codes for that user
-  Counter.findOneAndRemove({counter_name:counter.counter_name}, {}, function(err, count)
+  Counter.findOneAndRemove({counter_name: counter.counter_name}, {}, function(err, count)
   {
     if(err)
     {
@@ -65,17 +65,20 @@ module.exports.add = function(counter, callback)
       return;
     }
     //successfully deleted old record if it existed.
-    console.log('successfully deleted old counter, creating new counter record...');
-    Counter.create(counter, function(err)
+    console.log('successfully deleted old counter record, creating new counter record [%s]', counter.counter_name);
+    Counter.create(counter, function(err, countr)
     {
       if(err)
       {
-        callback(err);
+        if(callback)
+          callback(err);
+        else console.log(err);
         return;
       }
-      console.log('successfully created counter');
       //successfully created counter
-      callback();
+      if(callback)
+        callback(err, countr);
+      else console.log('successfully created new counter record [%s].', counter.counter_name);
     });
   });
 };

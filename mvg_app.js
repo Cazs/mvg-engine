@@ -319,16 +319,50 @@ app.get('/:object',function(req, res)
   {
     if(exists)
     {
-      var fpath = path.join(__dirname, '/public/' + req.params.object);
-      var stat = fs.statSync(fpath);
-      res.writeHead(200, {'Content-Type':'text/plain','Content-Length':stat.size});
-      
-      var dataStream = fs.createReadStream(fpath);
-      dataStream.pipe(res);
-      console.log('served file [%s].', req.params.object); 
+      //create download counter for file - if it already exists, nothing will be done except return the counter
+      createCounter(req.params.object, function(ctr_err, counter)
+      {
+        if(ctr_err)
+        {
+          logServerError(ctr_err);
+          errorAndCloseConnection(res, 409, errors.CONFLICT + ' - could not create counter for file ['+req.params.object+'], message: ' + ctr_err.message);
+          return;
+        }
+        if(counter)
+        {
+          //update download counter for file
+          counter.count += 1;
+          counters.update(req.params.object, counter, function(err, ctr)
+          {
+            if(err)
+            {
+              logServerError(err);
+              errorAndCloseConnection(res, 409, errors.CONFLICT + ' - ' + err.message);
+              return;
+            }
+            if(ctr)
+            {
+              //updated download counter
+              console.log('successfully updated download counter for [%s] to [%s].', req.params.object, ctr.count);
+              var fpath = path.join(__dirname, '/public/' + req.params.object);
+              var stat = fs.statSync(fpath);
+              res.writeHead(200, {'Content-Type': 'text/plain', 'Content-Length': stat.size});
+              
+              var dataStream = fs.createReadStream(fpath);
+              dataStream.pipe(res);
+              console.log('served file [%s].', req.params.object); 
+              //res.end('successfully served file ['+req.params.object+'].');//close connection
+            } else logServerError(new Error("could not update download counter for file [" + req.params.object + "] "));
+          });
+        } else {
+          logServerError(new Error('Could not create counter for file ['+req.params.object+'].'));
+          errorAndCloseConnection(res, 409, errors.CONFLICT + ' - could not create counter for file ['+req.params.object+']');
+          return;
+        }
+      });
     }else{
-      logServerError(new Error("file [" + file_path + "] was not found."));
-      errorAndCloseConnection(res, 404, errors.NOT_FOUND + " - file [" + file_path + "] was not found on this server.");
+      logServerError(new Error("file [" + req.params.object + "] was not found."));
+      errorAndCloseConnection(res, 404, errors.NOT_FOUND + " - file [" + req.params.object + "] was not found on this server.");
     }
   });
 });
@@ -580,28 +614,44 @@ app.post('/api/auth',function(req, res)
   });
 });
 
-createCounter = function(counter_name)
+createCounter = function(counter_name, callback)
 {
+  //check if counter exists
   counters.get(counter_name, function(err, counter)
   {
     if(err)
     {
-      logServerError(err);
-      return;
+      //counter DNE
+      //if(callback)
+      //  callback(err, counter);
+      //logServerError(err);
+      //return;
     }
-    if(!counter)//if job counter not added to database add it
+    //if counter DNE, create it, else return it
+    if(!counter)
     {
-      var count = {counter_name:counter_name};
-      counters.add(count, function(err)
+      //create counter
+      var count = {counter_name: counter_name};
+      counters.add(count, function(add_err, ctr)
       {
-        if(err)
+        if(add_err)
         {
-          logServerError(err);
+          if(callback)
+            callback(add_err, null);
+          else logServerError(add_err);
           return;
         }
-        console.log('successfully created new counter "%s"', counter_name);
+        if(callback)
+        {
+          console.log('successfully created new counter [%s].', counter_name);
+          callback(null, ctr);
+        } else console.log('successfully created new counter [%s].', counter_name);
       });
-    }else console.log('counter "%s" already exists.', counter_name);
+    } else {
+      if(callback)
+        callback(null, counter);
+      else console.log('counter [%s] already exists.', counter_name);      
+    }
   });
 }
 
